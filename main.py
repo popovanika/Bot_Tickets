@@ -105,6 +105,8 @@ def FunTickets(data):
 
             # Строка с тэгами
             tags = MyPage.find_all('p', {'class': 'card-search__category d-none d-lg-block'})[ii].text
+            if len(tags) == 0:  # Цирк Никулина почему-то с пустым тегом
+                tags = teatre.split()[0]
 
             # разделяем строку вида: 2 ноя•пн•19:00•осталось более 100 билетов
             strr = MyPage.find_all('a', {'class': 'text-uppercase'})[ii].text
@@ -258,23 +260,26 @@ def get_day(message):
     date = message.text
     date_match = re.match("\d{1,2}['.']\d{1,2}", date)# формат ввода проверка
     if date_match:
-        day = dbworker.del_state(str(message.chat.id) + 'day')  # Удалить день
-        dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
-        dbworker.set_state(str(message.chat.id) + 'day', date)  # Записать день
-        bot.send_message(message.chat.id, "Получаю данные...\n"
-                                          "Выбери и введи желаемую категорию события")
-        x = FunTickets(date)
-        df = pd.read_csv('events.csv')
-        query = """
+        mass = date.split('.')
+        if not (int(mass[0]) < 1 or int(mass[0]) > 31 or int(mass[1]) < 1 or int(mass[1]) > 12):
+            day = dbworker.del_state(str(message.chat.id) + 'day')  # Удалить день
+            dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
+            dbworker.set_state(str(message.chat.id) + 'day', date)  # Записать день
+            bot.send_message(message.chat.id, "Получаю данные...\n"
+                                            "Выбери и введи желаемую категорию события")
+            x = FunTickets(date)
+            df = pd.read_csv('events.csv')
+            query = """
                     select tags "Категория", count(1) "Событий", sum(ost) "Билетов", min(min_price) "Мин цена"
                     from df
                     group by tags
                     """
-        df = ps.sqldf(query, locals())
-        good_table(df, header_columns=0, col_width=2.0, )
-        with open("tags.png", "rb") as fp:
-            bot.send_document(message.chat.id, fp)
-
+            df = ps.sqldf(query, locals())
+            good_table(df, header_columns=0, col_width=2.0, )
+            with open("tags.png", "rb") as fp:
+                bot.send_document(message.chat.id, fp)
+        else:# проверка на несуществующую дату
+            bot.send_message(message.chat.id, 'Некорректная дата. Напомню, формат ДД.ММ, например, 31.01')
     else:# проверка формата ввода
         bot.send_message(message.chat.id, 'Не похоже, чтобы ты ввел дату. Напомню, формат ДД.ММ, например, 31.01')
 
