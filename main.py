@@ -16,6 +16,9 @@ import pandas as pd
 import pandasql as ps
 from pandasql import sqldf
 import datetime
+import numpy as np
+import matplotlib.pyplot as plt
+import re
 
 bot = telebot.TeleBot(config.token)
 
@@ -37,7 +40,7 @@ def expand_col(df_src, col, sep='|'):
     df_new = pd.DataFrame(di).transpose()
     return df_new
 
-
+# сам парсинг сайта
 def FunTickets(data):
     # Определим введенная дата в нашем году или в будущем и передаем правильный год для поиска
     today = datetime.datetime.now()
@@ -81,7 +84,7 @@ def FunTickets(data):
             MyPage = BeautifulSoup(driver.page_source, 'lxml')
             sleep(1.5)
 
-        # Для каждой страницы запускаем функцию парсинга с указанием количества мероприятий на странице
+        # Проходим по страницам
         if i == 1:
             f_count_event = min(20, count_event)
         elif i == count_sheet and count_event % 20 != 0:
@@ -150,8 +153,33 @@ def FunTickets(data):
 
     df = pd.DataFrame(res)
     df_res = expand_col(df, 'tags', sep=',')
-
     df_res.to_csv('events.csv', index=False)
+
+# Рисуем красивую табличку из датафрейма пандас и сохраняем в файле категорий или событий
+def good_table(data, col_width=3.0, filename="tags.png", row_height=0.625, font_size=14,
+              header_color='#30355e', row_colors=['#f1f1f2', 'w'], edge_color='w',
+              bbox=[0, 0, 1, 1], header_columns=0,
+              ax=None, **kwargs):
+    if ax is None:
+        size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
+        fig, ax = plt.subplots(figsize=size)
+        ax.axis('off')
+    mpl_table = ax.table(cellText=data.values, bbox=bbox, colLabels=data.columns, **kwargs)
+    mpl_table.auto_set_font_size(False)
+    mpl_table.set_fontsize(font_size)
+
+    for k, cell in mpl_table._cells.items():
+        cell.set_edgecolor(edge_color)
+        if k[0] == 0 or k[1] < header_columns:
+            cell.set_text_props(weight='bold', color='w', ha='left')
+            cell.set_facecolor(header_color)
+        else:
+            cell.set_text_props(ha='left')
+            cell.set_facecolor(row_colors[k[0] % len(row_colors)])
+
+    ax.get_figure()
+    fig.savefig(filename)
+    return
 
 
 @bot.message_handler(commands=["info"])
@@ -163,6 +191,7 @@ def cmd_info(message):
                                       "Далее нужно ввести категорию и максимально возможную цену билета\n"
                                       "Бот укажет Название и место события, количество свободных билетов и цены\n"
                                       "При желании, цены можно повыбирать, указывая несколько раз\n"
+                                      "В процессе диалога можно сменить категорию событий, выбрав команду /tags\n"
                                       "Введи /reset чтобы запустить новый диалог с ботом.")
 
 
@@ -170,10 +199,11 @@ def cmd_info(message):
 def cmd_commands(message):
     bot.send_message(message.chat.id, "/reset - перезапуск бота.\n"
                                       "/start - создать новый диалог.\n"
-                                      "/info - получить информацию о работе бота\n")
+                                      "/info - получить информацию о работе бота\n"
+                                      "/tags - сменить категорию событий\n")
 
 
-# По команде /reset будем сбрасывать состояния, возвращаясь к началу диалога
+# По команде /reset сброс состояния
 @bot.message_handler(commands=["reset"])
 def cmd_reset(message):
     bot.send_message(message.chat.id, "Начнем заново.\n"
@@ -201,32 +231,57 @@ def cmd_start(message):
 
     dbworker.set_state(message.chat.id, config.States.S_ENTER_DAY.value)
 
+@bot.message_handler(commands=["tags"])
+def listtags(message):
+    dbworker.del_state(str(message.chat.id) + 'tags') # Удалить категорию
+    day = dbworker.get_current_state(str(message.chat.id) + 'day').strip()
+    if day == '0':
+        bot.send_message(message.chat.id, "Данную команду можно выбрать только после ввода желаемой даты!")
+    else:
+        dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
+        bot.send_message(message.chat.id, "Ты выбрал дату: {} \n" 
+                                     "Выбери из списка и введи желаемую категорию события".format(day))
+        df = pd.read_csv('events.csv')
+        query = """
+                select tags "Категория", count(1) "Событий", sum(ost) "Билетов", min(min_price) "Мин цена"
+                from df
+                group by tags
+                """
+        df = ps.sqldf(query, locals())
+        good_table(df, header_columns=0, col_width=2.0, )
+        with open("tags.png", "rb") as fp:
+            bot.send_document(message.chat.id, fp)
 
 @bot.message_handler(func=lambda message: dbworker.get_current_state(message.chat.id) == config.States.S_ENTER_DAY.value
-                     and message.text.strip().lower() not in ('/reset', '/info', '/start', '/commands',
-                                                              '/listtags'))
+                     and message.text.strip().lower() not in ('/reset', '/info', '/start', '/commands'))
 def get_day(message):
-    day = dbworker.del_state(str(message.chat.id)+'day') # Удалить день
-    dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
     date = message.text
-    dbworker.set_state(str(message.chat.id) + 'day', date)  # Записать день
+    date_match = re.match("\d{1,2}['.']\d{1,2}", date)# формат ввода проверка
+    if date_match:
+        day = dbworker.del_state(str(message.chat.id) + 'day')  # Удалить день
+        dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
+        dbworker.set_state(str(message.chat.id) + 'day', date)  # Записать день
+        bot.send_message(message.chat.id, "Получаю данные...\n"
+                                          "Выбери и введи желаемую категорию события")
+        x = FunTickets(date)
+        df = pd.read_csv('events.csv')
+        query = """
+                    select tags "Категория", count(1) "Событий", sum(ost) "Билетов", min(min_price) "Мин цена"
+                    from df
+                    group by tags
+                    """
+        df = ps.sqldf(query, locals())
+        good_table(df, header_columns=0, col_width=2.0, )
+        with open("tags.png", "rb") as fp:
+            bot.send_document(message.chat.id, fp)
 
-    bot.send_message(message.chat.id, "Дождись вывода найденных категорий и количества событий\n"
-                                      "затем введи желаемую категорию")
-    x = FunTickets(date)
-    df = pd.read_csv('events.csv')
-    query = """
-        select tags "Категория", count(1) "Событий", sum(ost) "Билетов", min(min_price) "Мин цена"
-        from df
-        group by tags
-        """
-    for_sending = ps.sqldf(query, locals())
-    bot.send_message(message.chat.id, tabulate(for_sending, headers=for_sending.columns, tablefmt="pipe"))
+    else:# проверка формата ввода
+        bot.send_message(message.chat.id, 'Не похоже, чтобы ты ввел дату. Напомню, формат ДД.ММ, например, 31.01')
 
 
 @bot.message_handler(func=lambda message: dbworker.get_current_state(message.chat.id) == config.States.S_ENTER_TAGS.value
                      and message.text.strip().lower() not in ('/reset', '/info', '/start', '/commands'))
-def listtags(message):
+def get_tag(message):
     tag = message.text
     dbworker.del_state(str(message.chat.id) + 'tags') # Удалить категорию
     dbworker.set_state(message.chat.id, config.States.S_ENTER_PRICE.value)
@@ -237,16 +292,36 @@ def listtags(message):
 @bot.message_handler(func=lambda message: dbworker.get_current_state(message.chat.id) == config.States.S_ENTER_PRICE.value
                      and message.text.strip().lower() not in ('/reset', '/info', '/start', '/commands'))
 def price(message):
-    dbworker.del_state(str(message.chat.id) + 'price') # Перезапись категории
-    bot.send_message(message.chat.id, 'Вывожу первые 5 подходящих мероприятий')
-    day = dbworker.get_current_state(str(message.chat.id) + 'day').strip()
-    tag = dbworker.get_current_state(str(message.chat.id) + 'tags').strip()
-    price = int(message.text)
-    df = pd.read_csv('events.csv')
-    for_sending = df[(df.tags == tag) & (df.min_price <= price)][['title','teatre','ost','min_price']].head(5);
-    bot.send_message(message.chat.id, tabulate(for_sending, headers=for_sending.columns, tablefmt="pipe"))
+    price = message.text
+    price_match = re.match("\d+",price) # формат ввода проверка
+    if price_match:
+        price_int = int(price)
+        dbworker.del_state(str(message.chat.id) + 'price') # Перезапись категории
+        bot.send_message(message.chat.id, 'Вывожу подходящие мероприятия')
+        day = dbworker.get_current_state(str(message.chat.id) + 'day').strip()
+        tag = dbworker.get_current_state(str(message.chat.id) + 'tags').strip()
+        df = pd.read_csv('events.csv')
+        df = df[(df.tags == tag) & (df.min_price <= price_int)][['title', 'teatre', 'ost', 'min_price','max_price']]
+        query = """
+            select 'Событие "'||title||'", место "'||teatre||'", доступно билетов '||ost||', цены '||min_price||'-'||max_price
+            as "Список событий"
+            from df
+            """
+        df = ps.sqldf(query, locals())
+        good_table(df, header_columns=0, col_width=23.0, filename="events.png")
+        with open("events.png", "rb") as fp:
+            bot.send_document(message.chat.id, fp)
 
-@bot.message_handler(func=lambda message: message.text not in ('/reset', '/info', '/start', '/commands'))
+        bot.send_message(message.chat.id, "Измени сумму бюджета\n"
+                                          "или Введи /tags чтобы выбрать другую категорию за ту же дату\n"
+                                          "или Введи /start чтобы выбрать другую дату")
+    else:# проверка формата ввода
+        bot.send_message(message.chat.id, "Это не число... \n"
+                                          "Введи сумму бюджета 1 билет\n"
+                                          "или Введи /tags чтобы сменить желаемую категорию\n"
+                                          "или Введи /start чтобы выбрать другую дату")
+
+@bot.message_handler(func=lambda message: message.text not in ('/reset', '/info', '/start', '/commands','/tags'))
 def cmd_sample_message(message):
     bot.send_message(message.chat.id, "Слушай, я Nikabot!\n"
                                       "Я тебя не понимаю :(\n"
