@@ -24,6 +24,8 @@ import re
 load_dotenv()
 TOKEN = environ.get('TOKEN')
 
+bot = telebot.TeleBot(token=TOKEN)
+
 pict = 'http://dvf-vavt.ru/images/Videogalereya/gettyimages-174831214-612x612.jpg'
 
 
