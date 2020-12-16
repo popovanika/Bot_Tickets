@@ -20,7 +20,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 
-bot = telebot.TeleBot(config.token)
+#bot = telebot.TeleBot(config.token)
+load_dotenv()
+TOKEN = environ.get('TOKEN')
 
 pict = 'http://dvf-vavt.ru/images/Videogalereya/gettyimages-174831214-612x612.jpg'
 
