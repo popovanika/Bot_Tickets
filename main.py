@@ -186,8 +186,6 @@ def good_table(data, col_width=3.0, filename="tags.png", row_height=0.625, font_
     ax.get_figure()
     fig.savefig(filename)
     return
-
-
 @bot.message_handler(commands=["info"])
 def cmd_info(message):
     bot.send_message(message.chat.id, "Информация о данном боте: \n"
@@ -213,7 +211,7 @@ def cmd_commands(message):
 @bot.message_handler(commands=["reset"])
 def cmd_reset(message):
     bot.send_message(message.chat.id, "Начнем заново.\n"
-                                      "Введи дату, на которую хочешь получить мероприятия Формат ввода: dd.mm.\n"
+                                      "Введи дату, на которую хочешь получить мероприятия Формат ввода: ДД.ММ\n"
                                       "Введи /info или /commands чтобы получить информацию о боте.")
     bot.send_photo(message.chat.id, pict)
     dbworker.set_state(message.chat.id, config.States.S_ENTER_DAY.value)
@@ -246,7 +244,7 @@ def listtags(message):
     else:
         dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
         bot.send_message(message.chat.id, "Ты выбрал дату: {} \n" 
-                                     "Выбери из списка и введи желаемую категорию события".format(day))
+                                     "В файле - найденные мероприятия по категориям".format(day))
         df = pd.read_csv('events.csv')
         query = """
                 select tags "Категория", count(1) "Событий", sum(ost) "Билетов", min(min_price) "Мин цена"
@@ -257,6 +255,11 @@ def listtags(message):
         good_table(df, header_columns=0, col_width=2.0, )
         with open("tags.png", "rb") as fp:
             bot.send_document(message.chat.id, fp)
+        x = ['1 - Детям', '2 - Цирк', '3 - Концерты', '4 - Мюзиклы', '5 - Шоу', '7 - Спектакли', '8 - Экскурсии'
+            , '9 - Классика', '10 - Фестивали', '11 - Спорт']
+        bot.send_message(message.chat.id, "Возможные категории: ")
+        bot.send_message(message.chat.id, "\n".join(x))
+        bot.send_message(message.chat.id, "Введи цифру нужной категории")
 
 @bot.message_handler(func=lambda message: dbworker.get_current_state(message.chat.id) == config.States.S_ENTER_DAY.value
                      and message.text.strip().lower() not in ('/reset', '/info', '/start', '/commands'))
@@ -266,11 +269,7 @@ def get_day(message):
     if date_match:
         mass = date.split('.')
         if not (int(mass[0]) < 1 or int(mass[0]) > 31 or int(mass[1]) < 1 or int(mass[1]) > 12):
-            day = dbworker.del_state(str(message.chat.id) + 'day')  # Удалить день
-            dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
-            dbworker.set_state(str(message.chat.id) + 'day', date)  # Записать день
-            bot.send_message(message.chat.id, "Получаю данные...\n"
-                                            "Выбери и введи желаемую категорию события")
+            bot.send_message(message.chat.id, "Получаю данные... Жди...\n")
             x = FunTickets(date)
             df = pd.read_csv('events.csv')
             query = """
@@ -281,7 +280,17 @@ def get_day(message):
             df = ps.sqldf(query, locals())
             good_table(df, header_columns=0, col_width=2.0, )
             with open("tags.png", "rb") as fp:
+                bot.send_message(message.chat.id, "В файлике - количество найденных событий по категориям")
                 bot.send_document(message.chat.id, fp)
+
+            x = ['1 - Детям', '2 - Цирк','3 - Концерты', '4 - Мюзиклы', '5 - Шоу', '7 - Спектакли', '8 - Экскурсии'
+                 , '9 - Классика','10 - Фестивали', '11 - Спорт']
+            bot.send_message(message.chat.id, "Возможные категории: ")
+            bot.send_message(message.chat.id,"\n".join(x))
+            bot.send_message(message.chat.id, "Введи цифру нужной категории")
+            day = dbworker.del_state(str(message.chat.id) + 'day')  # Удалить день
+            dbworker.set_state(message.chat.id, config.States.S_ENTER_TAGS.value)
+            dbworker.set_state(str(message.chat.id) + 'day', date)  # Записать день
         else:# проверка на несуществующую дату
             bot.send_message(message.chat.id, 'Некорректная дата. Напомню, формат ДД.ММ, например, 31.01')
     else:# проверка формата ввода
@@ -292,10 +301,17 @@ def get_day(message):
                      and message.text.strip().lower() not in ('/reset', '/info', '/start', '/commands'))
 def get_tag(message):
     tag = message.text
-    dbworker.del_state(str(message.chat.id) + 'tags') # Удалить категорию
-    dbworker.set_state(message.chat.id, config.States.S_ENTER_PRICE.value)
-    dbworker.set_state(str(message.chat.id) + 'tags', tag)  # Записать категорию
-    bot.send_message(message.chat.id, 'Введи бюджет на 1 билет')
+    if tag not in ('1','2','3','4','5','6','7','8','9','10','11'):
+        bot.send_message(message.chat.id, 'Ты ввел что-то не то. Напомню, нужно ввести цифру категории')
+        x = ['1 - Детям', '2 - Цирк', '3 - Концерты', '4 - Мюзиклы', '5 - Шоу', '7 - Спектакли', '8 - Экскурсии',
+         '9 - Классика', '10 - Фестивали', '11 - Спорт']
+        bot.send_message(message.chat.id, "Возможные категории: ")
+        bot.send_message(message.chat.id, "\n".join(x))
+    else:
+        dbworker.del_state(str(message.chat.id) + 'tags') # Удалить категорию
+        dbworker.set_state(message.chat.id, config.States.S_ENTER_PRICE.value)
+        dbworker.set_state(str(message.chat.id) + 'tags', tag)  # Записать категорию
+        bot.send_message(message.chat.id, 'Введи бюджет на 1 билет')
 
 
 @bot.message_handler(func=lambda message: dbworker.get_current_state(message.chat.id) == config.States.S_ENTER_PRICE.value
@@ -306,21 +322,26 @@ def price(message):
     if price_match:
         price_int = int(price)
         dbworker.del_state(str(message.chat.id) + 'price') # Перезапись категории
-        bot.send_message(message.chat.id, 'Вывожу подходящие мероприятия')
         day = dbworker.get_current_state(str(message.chat.id) + 'day').strip()
         tag = dbworker.get_current_state(str(message.chat.id) + 'tags').strip()
+        bot.send_message(message.chat.id, 'Вывожу подходящие мероприятия: дата {}, категория {}'.format(day, tag))
         df = pd.read_csv('events.csv')
+        x = [('1', 'Детям'), ('2','Цирк'), ('3','Концерты'), ('4','Мюзиклы'), ('5','Шоу')
+            ,('7','Спектакли'), ('8','Экскурсии'),('9','Классика'), ('10','Фестивали'), ('11','Спорт')]
+        for d in x: tag = tag.replace(d[0], d[1])
         df = df[(df.tags == tag) & (df.min_price <= price_int)][['title', 'teatre', 'ost', 'min_price','max_price']]
-        query = """
-            select 'Событие "'||title||'", место "'||teatre||'", доступно билетов '||ost||', цены '||min_price||'-'||max_price
-            as "Список событий"
-            from df
-            """
-        df = ps.sqldf(query, locals())
-        good_table(df, header_columns=0, col_width=23.0, filename="events.png")
-        with open("events.png", "rb") as fp:
-            bot.send_document(message.chat.id, fp)
-
+        if not df.empty:
+            query = """
+                select 'Событие "'||title||'", место "'||teatre||'", доступно билетов '||ost||', цены '||min_price||'-'||max_price
+                as "Список событий"
+                from df
+                """
+            df = ps.sqldf(query, locals())
+            good_table(df, header_columns=0, col_width=23.0, filename="events.png")
+            with open("events.png", "rb") as fp:
+                bot.send_document(message.chat.id, fp)
+        else:
+            bot.send_message(message.chat.id, "Для данной категории не найдено событий... \n")
         bot.send_message(message.chat.id, "Измени сумму бюджета\n"
                                           "или Введи /tags чтобы выбрать другую категорию за ту же дату\n"
                                           "или Введи /start чтобы выбрать другую дату")
