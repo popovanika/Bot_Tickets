@@ -5,12 +5,6 @@ import dbworker
 import telebot
 from tabulate import tabulate
 from bs4 import BeautifulSoup
-from selenium import webdriver as wb
-#Чтобы запускать парсинг в невидимом режиме
-ff = 'C:/Users/Nika/chromedriver.exe'
-chrome_option = wb.ChromeOptions()
-chrome_option.add_argument("headless")
-driver = wb.Chrome(executable_path=ff,chrome_options=chrome_option)
 from time import sleep
 import pandas as pd
 import pandasql as ps
@@ -19,6 +13,25 @@ import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 import re
+# настройка драйвера для работы на heroku
+from selenium import webdriver as wb
+import os
+chrome_options = wb.ChromeOptions()
+chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--no-sandbox")
+driver = wb.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"),chrome_options = chrome_options)
+
+driver.get("https://www.google.com")
+print(driver.page_source)
+
+#Чтобы запускать парсинг в невидимом режиме
+#ff = 'C:/Users/Nika/chromedriver.exe'
+#chrome_option = wb.ChromeOptions()
+#chrome_option.add_argument("headless")
+#driver = wb.Chrome(executable_path=ff,chrome_options=chrome_option)
+
 
 #bot = telebot.TeleBot(config.token)
 load_dotenv()
