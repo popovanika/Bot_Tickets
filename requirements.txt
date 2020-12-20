@@ -11,7 +11,6 @@ numpy==1.19.3
 pandas==1.1.4
 pandasql==0.7.3
 Pillow==8.0.1
-pretty-html-table==0.9.dev0
 pyparsing==2.4.7
 pyTelegramBotAPI==3.7.3
 python-dateutil==2.8.1
