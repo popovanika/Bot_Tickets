@@ -15,13 +15,14 @@ import matplotlib.pyplot as plt
 import re
 # настройка драйвера для работы на heroku
 from selenium import webdriver as wb
+from selenium.webdriver.chrome.options import Options
 import os
 chrome_options = wb.ChromeOptions()
 chrome_options.binary_location = os.environ.get("GOOGLE_CHROME_BIN")
 chrome_options.add_argument("--headless")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--no-sandbox")
-driver = wb.Chrome(executable_path=os.environ.get("CHROMEDRIVER_PATH"),chrome_options = chrome_options)
+driver = wb.Chrome(executable_path=str(os.environ.get("CHROMEDRIVER_PATH")),chrome_options = chrome_options)
 
 driver.get("https://www.google.com")
 #print(driver.page_source)
