@@ -1,5 +1,6 @@
 from enum import Enum
 
+token = '1487159881:AAH1DBXuQxJPQVVs0Mr4EOn1LZtDtRTnfgU'
 db_file = 'database.vdb'
 
 

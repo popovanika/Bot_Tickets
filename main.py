@@ -5,40 +5,23 @@ import dbworker
 import telebot
 from tabulate import tabulate
 from bs4 import BeautifulSoup
+from selenium import webdriver as wb
+#Чтобы запускать парсинг в невидимом режиме
+ff = 'C:/Users/Nika/chromedriver.exe'
+chrome_option = wb.ChromeOptions()
+chrome_option.add_argument("headless")
+driver = wb.Chrome(executable_path=ff,chrome_options=chrome_option)
 from time import sleep
 import pandas as pd
 import pandasql as ps
 from pandasql import sqldf
 import datetime
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import re
-# настройка драйвера для работы на heroku
-from selenium import webdriver
-import os
-chrome_options = webdriver.ChromeOptions()
-chrome_options.binary_location = os.environ.get('GOOGLE_CHROME_BIN')
-chrome_options.add_argument('--headless')
-chrome_options.add_argument('--disable-gpu')
-chrome_options.add_argument('--disable-dev-shm-usage')
-chrome_options.add_argument('--no-sandbox')
-driver = webdriver.Chrome(executable_path=str(os.environ.get('CHROMEDRIVER_PATH')),chrome_options = chrome_options)
 
-driver.get('https://www.google.com')
-#print(driver.page_source)
-
-#Чтобы запускать парсинг в невидимом режиме
-#ff = 'C:/Users/Nika/chromedriver.exe'
-#chrome_option = wb.ChromeOptions()
-#chrome_option.add_argument("headless")
-#driver = wb.Chrome(executable_path=ff,chrome_options=chrome_option)
-
-
-#bot = telebot.TeleBot(config.token)
-load_dotenv()
-TOKEN = environ.get('TOKEN')
-
-bot = telebot.TeleBot(token=TOKEN)
+bot = telebot.TeleBot(config.token)
 
 pict = 'http://dvf-vavt.ru/images/Videogalereya/gettyimages-174831214-612x612.jpg'
 
@@ -65,8 +48,9 @@ def FunTickets(data):
     my_month = int(today.month)
     my_year = today.year
     next_year = my_year + 1
-    p_month = int(data[3:5])
-    if p_month >= my_month:
+    p_month = data.split('.')
+    pp_month = int(p_month[1])
+    if pp_month >= my_month:
         year = my_year
         driver.get(
             'https://www.ticketland.ru/search/performance/?mnd=' + data + '.' + str(year) + '&mxd=' + data + '.' + str(
@@ -200,6 +184,8 @@ def good_table(data, col_width=3.0, filename="tags.png", row_height=0.625, font_
     ax.get_figure()
     fig.savefig(filename)
     return
+
+
 @bot.message_handler(commands=["info"])
 def cmd_info(message):
     bot.send_message(message.chat.id, "Информация о данном боте: \n"
@@ -268,7 +254,7 @@ def listtags(message):
         df = ps.sqldf(query, locals())
         good_table(df, header_columns=0, col_width=2.0, )
         with open("tags.png", "rb") as fp:
-            bot.send_document(message.chat.id, fp)
+            bot.send_photo(message.chat.id, fp)
         x = ['1 - Детям', '2 - Цирк', '3 - Концерты', '4 - Мюзиклы', '5 - Шоу', '7 - Спектакли', '8 - Экскурсии'
             , '9 - Классика', '10 - Фестивали', '11 - Спорт']
         bot.send_message(message.chat.id, "Возможные категории: ")
@@ -295,7 +281,7 @@ def get_day(message):
             good_table(df, header_columns=0, col_width=2.0, )
             with open("tags.png", "rb") as fp:
                 bot.send_message(message.chat.id, "В файлике - количество найденных событий по категориям")
-                bot.send_document(message.chat.id, fp)
+                bot.send_photo(message.chat.id, fp)
 
             x = ['1 - Детям', '2 - Цирк','3 - Концерты', '4 - Мюзиклы', '5 - Шоу', '7 - Спектакли', '8 - Экскурсии'
                  , '9 - Классика','10 - Фестивали', '11 - Спорт']
@@ -353,7 +339,7 @@ def price(message):
             df = ps.sqldf(query, locals())
             good_table(df, header_columns=0, col_width=23.0, filename="events.png")
             with open("events.png", "rb") as fp:
-                bot.send_document(message.chat.id, fp)
+                bot.send_photo(message.chat.id, fp)
         else:
             bot.send_message(message.chat.id, "Для данной категории не найдено событий... \n")
         bot.send_message(message.chat.id, "Измени сумму бюджета\n"
